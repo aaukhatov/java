@@ -91,14 +91,14 @@ public class WebClient {
 	public byte[] download(final String uri, int chunkSize)
 			throws InterruptedException, IOException, URISyntaxException {
 
-		final int length = (int) contentLength(uri);
+		final int expectedLength = (int) contentLength(uri);
 		int start = 0;
 		int offset = chunkSize - 1;
 
-		byte[] downloadedBytes = new byte[length];
+		byte[] downloadedBytes = new byte[expectedLength];
 		int downloadedLength = 0;
 
-		while (downloadedLength < length) {
+		while (downloadedLength < expectedLength) {
 
 			WebClient.Response response = download(uri, start, offset);
 
@@ -109,10 +109,7 @@ public class WebClient {
 			if (response.status != HTTP_OK) {
 				System.arraycopy(chunkedBytes, 0, downloadedBytes, start, chunkedBytes.length);
 				start = offset + 1;
-				offset += chunkSize;
-				if (offset > length) {
-					offset = length;
-				}
+				offset += offset > expectedLength ? expectedLength : chunkSize;
 			}
 		}
 
