@@ -130,7 +130,7 @@ public class WebClient {
 				if (isPartial(response)) {
 					System.arraycopy(chunkedBytes, 0, downloadedBytes, start, chunkedBytes.length);
 					start = offset + 1;
-					offset = Math.min(offset + chunkSize, expectedLength);
+					offset = Math.min(offset + chunkSize, expectedLength - 1);
 				}
 			} catch (IOException e) {
 				attempts++;
