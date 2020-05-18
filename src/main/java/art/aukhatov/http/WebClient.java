@@ -13,6 +13,8 @@ import java.time.Duration;
 import java.util.OptionalLong;
 
 import static java.lang.String.format;
+import static java.lang.System.err;
+import static java.lang.System.out;
 
 public class WebClient {
 
@@ -20,14 +22,17 @@ public class WebClient {
 	private static final String RANGE_FORMAT = "bytes=%d-%d";
 	private static final String HEADER_CONTENT_LENGTH = "content-length";
 	private static final String HTTP_HEAD = "HEAD";
-	private static final int HTTP_OK = 200;
+	private static final int DEFAULT_MAX_ATTEMPTS = 3;
+	private static final int HTTP_PARTIAL_CONTENT = 206;
 
 	private final HttpClient httpClient;
+	private int maxAttempts;
 
 	public WebClient() {
 		this.httpClient = HttpClient.newBuilder()
 				.connectTimeout(Duration.ofSeconds(10))
 				.build();
+		this.maxAttempts = DEFAULT_MAX_ATTEMPTS;
 	}
 
 	public WebClient(HttpClient httpClient) {
@@ -81,6 +86,10 @@ public class WebClient {
 	}
 
 	/**
+	 * Downloading a file partially by URI.
+	 * This API uses HTTP Header Range by RFC 2616.
+	 * See https://tools.ietf.org/html/rfc2616#section-14.35
+	 *
 	 * @param uri       The string to be parsed into a URI
 	 * @param chunkSize The size of chunk in bytes to download a file partially
 	 * @return a byte array containing the bytes downloaded from uri
@@ -89,7 +98,7 @@ public class WebClient {
 	 * @throws URISyntaxException   if the uri is invalid
 	 */
 	public byte[] download(final String uri, int chunkSize)
-			throws InterruptedException, IOException, URISyntaxException {
+			throws URISyntaxException, IOException, InterruptedException {
 
 		final int expectedLength = (int) contentLength(uri);
 		int start = 0;
@@ -98,24 +107,59 @@ public class WebClient {
 		byte[] downloadedBytes = new byte[expectedLength];
 		int downloadedLength = 0;
 
-		while (downloadedLength < expectedLength) {
+		int attempts = 1;
 
-			WebClient.Response response = download(uri, start, offset);
+		while (downloadedLength < expectedLength && attempts < maxAttempts) {
 
-			byte[] chunkedBytes = response.inputStream.readAllBytes();
+			Response response;
 
-			downloadedLength += chunkedBytes.length;
-
-			if (response.status != HTTP_OK) {
-				System.arraycopy(chunkedBytes, 0, downloadedBytes, start, chunkedBytes.length);
-				start = offset + 1;
-				offset += offset > expectedLength ? expectedLength : chunkSize;
+			try {
+				response = download(uri, start, offset);
+			} catch (IOException e) {
+				attempts++;
+				err.println(format("I/O error has occurred. %s", e));
+				out.println(format("Going to do %d attempt", attempts));
+				continue;
 			}
+
+			try (response.inputStream) {
+				byte[] chunkedBytes = response.inputStream.readAllBytes();
+
+				downloadedLength += chunkedBytes.length;
+
+				if (isPartial(response)) {
+					System.arraycopy(chunkedBytes, 0, downloadedBytes, start, chunkedBytes.length);
+					start = offset + 1;
+					offset = Math.min(offset + chunkSize, expectedLength);
+				}
+			} catch (IOException e) {
+				attempts++;
+				err.println(format("I/O error has occurred. %s", e));
+				out.println(format("Going to do %d attempt", attempts));
+				continue;
+			}
+
+			attempts = 1; // reset attempts counter
+		}
+
+		if (attempts >= maxAttempts) {
+			err.println("A file could not be downloaded. Number of attempts are exceeded.");
 		}
 
 		return downloadedBytes;
 	}
 
+	private boolean isPartial(Response response) {
+		return response.status == HTTP_PARTIAL_CONTENT;
+	}
+
+	public int maxAttempts() {
+		return maxAttempts;
+	}
+
+	public void setMaxAttempts(int maxAttempts) {
+		this.maxAttempts = maxAttempts;
+	}
 
 	public static class Response {
 		final BufferedInputStream inputStream;
