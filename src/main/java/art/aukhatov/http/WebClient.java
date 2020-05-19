@@ -56,12 +56,12 @@ public class WebClient {
 		return contentLength.orElse(0L);
 	}
 
-	public Response download(final String uri, int fromBytes, int toBytes)
+	public Response download(final String uri, int firstBytePos, int lastBytePos)
 			throws URISyntaxException, IOException, InterruptedException {
 
 		HttpRequest request = HttpRequest
 				.newBuilder(new URI(uri))
-				.header(HEADER_RANGE, format(RANGE_FORMAT, fromBytes, toBytes))
+				.header(HEADER_RANGE, format(RANGE_FORMAT, firstBytePos, lastBytePos))
 				.GET()
 				.version(HttpClient.Version.HTTP_2)
 				.build();
@@ -101,8 +101,8 @@ public class WebClient {
 			throws URISyntaxException, IOException, InterruptedException {
 
 		final int expectedLength = (int) contentLength(uri);
-		int start = 0;
-		int offset = chunkSize - 1;
+		int firstBytePos = 0;
+		int lastBytePos = chunkSize - 1;
 
 		byte[] downloadedBytes = new byte[expectedLength];
 		int downloadedLength = 0;
@@ -114,7 +114,7 @@ public class WebClient {
 			Response response;
 
 			try {
-				response = download(uri, start, offset);
+				response = download(uri, firstBytePos, lastBytePos);
 			} catch (IOException e) {
 				attempts++;
 				err.println(format("I/O error has occurred. %s", e));
@@ -128,9 +128,9 @@ public class WebClient {
 				downloadedLength += chunkedBytes.length;
 
 				if (isPartial(response)) {
-					System.arraycopy(chunkedBytes, 0, downloadedBytes, start, chunkedBytes.length);
-					start = offset + 1;
-					offset = Math.min(offset + chunkSize, expectedLength - 1);
+					System.arraycopy(chunkedBytes, 0, downloadedBytes, firstBytePos, chunkedBytes.length);
+					firstBytePos = lastBytePos + 1;
+					lastBytePos = Math.min(lastBytePos + chunkSize, expectedLength - 1);
 				}
 			} catch (IOException e) {
 				attempts++;
