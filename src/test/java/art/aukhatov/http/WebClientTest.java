@@ -27,5 +27,7 @@ class WebClientTest {
 		outputStream.close();
 
 		assertEquals(1_042_157, Files.readAllBytes(Paths.get(downloadedFilePath)).length);
+
+		Files.delete(path);
 	}
 }
