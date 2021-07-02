@@ -9,8 +9,8 @@ repositories {
     mavenCentral()
 }
 
-sourceCompatibility = JavaVersion.VERSION_14
-targetCompatibility = JavaVersion.VERSION_14
+sourceCompatibility = JavaVersion.VERSION_15
+targetCompatibility = JavaVersion.VERSION_15
 
 dependencies {
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.4.2'
